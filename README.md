@@ -81,7 +81,6 @@ rpts.run_alternate_model_evaluation_report_tbl(dfm_mushrooms) # green: max; pink
 rpts.run_alternate_model_evaluation_report_bar(dfm_mushrooms)
 ```
 
-
 ![png](images/yellowbrick_cls_model_selection_16_0.png)
 
 
