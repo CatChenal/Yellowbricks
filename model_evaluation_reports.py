@@ -23,6 +23,29 @@ from yellowbrick.datasets import load_mushroom
 from sklearn.datasets import load_iris
 
 
+def score_model(X, y, estimator, encode=True, **kwargs):
+    """
+    Test various estimators.
+    From Yellowbrick example, amended.
+    """
+    y = LabelEncoder().fit_transform(y)
+    
+    if encode:
+        model = Pipeline([('one_hot_encoder', OneHotEncoder()),
+                          ('estimator', estimator)])
+    else:
+        model = Pipeline([('estimator', estimator)])
+        
+    # Instantiate the classification model and visualizer
+    model.fit(X, y, **kwargs)
+
+    expected  = y
+    predicted = model.predict(X)
+
+    # return model name, (P, R, Fscore, Support):
+    return estimator.__class__.__name__, PRFS(expected, predicted)
+
+
 def visualize_model(X, y, estimator, **kwargs):
     """
     Test various estimators.
@@ -44,7 +67,6 @@ def visualize_model(X, y, estimator, **kwargs):
 
 
 def get_models():
-
     #LinearSV{C,R}: max_iter=1000, tol=0.0001
     # removed LinearSVC(max_iter=1200): due to issue
     # https://github.com/scikit-learn/scikit-learn/issues/11536
@@ -73,39 +95,20 @@ def get_iris_data():
     return X, y, labels
 
 
-def run_yellowbrick_model_evaluation_report(X, y, models):
+def yellowbrick_model_evaluation_report(X, y, models):
     for model in models:
         visualize_model(X, y, model)
+
 
 # Alternates ...............................................
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import panel as pn
-pn.extension()
 
-
-def score_model(X, y, estimator, encode=True, **kwargs):
-    """
-    Test various estimators.
-    """
-    y = LabelEncoder().fit_transform(y)
-    
-    if encode:
-        model = Pipeline([('one_hot_encoder', OneHotEncoder()),
-                          ('estimator', estimator)])
-    else:
-        model = Pipeline([('estimator', estimator)])
-        
-    # Instantiate the classification model and visualizer
-    model.fit(X, y, **kwargs)
-
-    expected  = y
-    predicted = model.predict(X)
-
-    # return model name, (P, R, Fscore, Support):
-    return estimator.__class__.__name__, PRFS(expected, predicted)
+# For df highlighting functions:
+MAX_BGC = 'palegreen'
+MIN_BGC = 'lightpink'
 
 
 def get_scores_dict(models, X, y, labels, encode=True):
@@ -127,16 +130,15 @@ def get_scores_dict(models, X, y, labels, encode=True):
     return results
 
 
-def get_scores_df(models, X, y, labels, encode=True):
+def get_scores_df(models, X, y, labels, encode=True, to_style=False):
     d = get_scores_dict(models, X, y, labels, encode=encode)
+    
+    idx = 'columns' if to_style else 'index' 
     for k, v in d.items():      
-        d[k] = pd.DataFrame.from_dict(v, 'index')
+        d[k] = pd.DataFrame.from_dict(v, idx)
 
     return pd.concat(d, axis=0)
 
-
-MAX_BGC = 'palegreen'
-MIN_BGC = 'lightpink'
 
 def highlight_max(s):
     is_max = s == s.max()
@@ -156,7 +158,8 @@ def with_style(df, caption):
                           ('text-align', 'right')]),
               dict(selector='caption',
                    props=[('caption-side', 'right'),
-                          ('font-weight', 'bold')])
+                          ('font-weight', 'bold'),
+                          ('font-size', 'large')])
               ]
     df = df.style.set_table_styles(styles)\
                  .apply(highlight_min)\
@@ -166,31 +169,45 @@ def with_style(df, caption):
     return df
 
 
-def run_alternate_model_evaluation_report_tbl(dfm):   
-    pRow = pn.Row()
+def model_evaluation_report_tbl(models, X, y, labels, caption, encode=True):
+    """
+    Output a styled df as in model_evaluation_report_tbl_from_df(), starting 
+    with models instances and data.
+    """
+    # get the scores:
+    df = get_scores_df(models, X, y, labels, encode=encode, to_style=True)
+    
+    # Flip level1 to columns:
+    df = df.unstack()
 
-    for i, cat in enumerate(dfm.index.levels[1]):
-        supp = dfm.loc[(dfm.index.get_level_values(0)[0],
-                        dfm.index.get_level_values(1) == cat),
-                       'Support'].values[0]
+    # save Support values:
+    sups = df.loc[:, (df.columns.get_level_values(0),
+                      df.columns.get_level_values(1) == 'Support')].values[0]
+
+    # Drop Support columns:
+    df.drop(labels='Support', axis=1, level=1, inplace=True)
+
+    # Create new col names -> levels[0]
+    new_lev_0 = []
+    for i, c in enumerate(df.columns.levels[0]):
+        new_lev_0.append('{} (Support: {:.0f})'.format(c.title(), sups[i]))
+
+    # Reset col index. Note: dropping the Support col did not
+    # change the index, so [:-1] excludes it.
+    mdx = pd.MultiIndex.from_product([new_lev_0,
+                                      df.columns.levels[1][:-1]])
+    df.columns = mdx
+
+    # Style df:
+    return with_style(df, caption)
 
 
-        df = dfm.loc[dfm.index.get_level_values(1) == cat,
-                     dfm.columns[:-1]].reset_index(level=1, drop=True)
-        idx_name = '<H4>{} (Support: {})</H4>'.format(cat.title(), supp)
-        
-        if i == 0:
-            html = with_style(df, '')
-        else:
-            html = with_style(df, '').hide_index()
-
-        pRow.extend([pn.Column(pn.Row(idx_name, max_height=45, align='end'),
-                               pn.Row(pn.pane.HTML(html)))
-                    ])
-    return pRow
-
-
-def run_alternate_model_evaluation_report_bar(dfm, xlim_to_1=False):
+def model_evaluation_report_bar(models, X, y, labels, xlim_to_1=False, encode=True):
+    """
+    
+    """
+    dfm = get_scores_df(models, X, y, labels, encode=encode)
+    
     n_cats = len(dfm.index.levels[1])
 
     fig, axes = plt.subplots(nrows=1, ncols=n_cats,
@@ -283,7 +300,7 @@ def scores_radar_plot(df_scores):
     """ 
     df_scores: output of get_scores_df(models, X, y, labels)
     """
-    fig = plt.figure(figsize=(4.2, 4.2),facecolor='white')
+    fig = plt.figure(figsize=(4.2, 4.2), facecolor='white')
 
     ax = fig.add_subplot(1,1,1, polar=True)
     try:
@@ -309,8 +326,6 @@ def scores_radar_plot(df_scores):
              fontsize='medium',
              color='k',
              alpha=0.8)
-    
-    # Changing gridlines to dotted and semi transparent
     plt.setp(ax.xaxis.get_gridlines(),
              color='grey',
              alpha=0.95,
@@ -337,6 +352,28 @@ def scores_radar_plot(df_scores):
     return ax
 
 
+def scores_radar_plot_example(dfm, cat='setosa'):
+    supp = dfm.loc[(dfm.index.get_level_values(0)[0],
+                    dfm.index.get_level_values(1) == cat),
+                        'Support'].values[0]
+    
+    df = dfm.loc[dfm.index.get_level_values(1) == cat,
+                 dfm.columns[:-1]].reset_index(level=1, drop=True)
+    df.index.name = '{} (support: {})'.format(cat.title(), supp)
+    
+    ax = scores_radar_plot(df)
+    
+    '''
+    # a bit too crowded with additional text:
+    fig = plt.gcf()
+    s = 'Radar plot of model selection scores for class {}'.format(cat.title())
+    fig.text(0.5, -0.05, s,
+             ha='center',
+             fontsize='large')
+    '''
+    plt.show()
+    
+    
 def generic_polar():
     xs = np.arange(10)
     ys = np.random.rand(10,3)
@@ -351,6 +388,6 @@ def generic_polar():
         for x, y in zip(xs, ys[:,c]):
             plt.polar(x, y, mrk[c])
 
-    ax.grid(lw=lw_grid, color='0.9')
+    ax.grid(lw=0.5, color='0.9')
     ax.set_yticks(rgrid)
     plt.show()
