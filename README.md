@@ -115,7 +115,8 @@ for lbl in labels:
     rpts.scores_radar_plot_example(dfm_iris, cat=lbl)
 ```
 
-![png](images/visual_model_selection_23_0.png)
+I'm glad I went through adapting DeepMind/bsuite radar charts, but I am I not quite satisfied with the outcome, at least with the Iris dataset: they only make it easy to id the least performant model, here SGDClassifier.  
+Additionally, until I find a way to line up the plots more compactly, they also suffer from the same 'scrolling objection' I initially made...with only 3 classes!
 
 ![png](images/visual_model_selection_23_1.png)
 
