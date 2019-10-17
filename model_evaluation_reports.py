@@ -130,10 +130,15 @@ def get_scores_dict(models, X, y, labels, encode=True):
     return results
 
 
-def get_scores_df(models, X, y, labels, encode=True, to_style=False):
+def get_scores_df(models, X, y, labels, encode=True, class_col=False):
+    """
+    encode: (bool): whether to skip the encoding step in Pipeline.
+    class_col: (bool): whether to have the classes as columns
+                       or as rows (index, default).
+    """
     d = get_scores_dict(models, X, y, labels, encode=encode)
     
-    idx = 'columns' if to_style else 'index' 
+    idx = 'columns' if class_col else 'index' 
     for k, v in d.items():      
         d[k] = pd.DataFrame.from_dict(v, idx)
 
@@ -169,13 +174,15 @@ def with_style(df, caption):
     return df
 
 
-def model_evaluation_report_tbl(models, X, y, labels, caption, encode=True):
+def model_evaluation_report_tbl(models, X, y, labels, caption,
+                                encode=True,
+                                no_supp_title=True):
     """
     Output a styled df as in model_evaluation_report_tbl_from_df(), starting 
     with models instances and data.
     """
     # get the scores:
-    df = get_scores_df(models, X, y, labels, encode=encode, to_style=True)
+    df = get_scores_df(models, X, y, labels, encode=encode, class_col=True)
     
     # Flip level1 to columns:
     df = df.unstack()
@@ -187,10 +194,16 @@ def model_evaluation_report_tbl(models, X, y, labels, caption, encode=True):
     # Drop Support columns:
     df.drop(labels='Support', axis=1, level=1, inplace=True)
 
+    if no_supp_title:
+        supp_title = ''
+    else:
+        supp_title = 'Support: '
+
     # Create new col names -> levels[0]
     new_lev_0 = []
     for i, c in enumerate(df.columns.levels[0]):
-        new_lev_0.append('{} (Support: {:.0f})'.format(c.title(), sups[i]))
+        new_lev_0.append('{} ({}{:.0f})'.format(c.title(),
+                                                supp_title, sups[i]))
 
     # Reset col index. Note: dropping the Support col did not
     # change the index, so [:-1] excludes it.
@@ -202,9 +215,60 @@ def model_evaluation_report_tbl(models, X, y, labels, caption, encode=True):
     return with_style(df, caption)
 
 
-def model_evaluation_report_bar(models, X, y, labels, xlim_to_1=False, encode=True):
+def model_evaluation_report_from_df(df, caption,
+                                    no_supp_title=True):
     """
+    Output a styled df with Support values in header, not in table, and
+    max and min scores highlighted green & pink, respectively.
+    no_supp_title (bool): output 'class_i (value)' in header else 
+                          'class_i Support: (value)'.
+    """
+    if no_supp_title:
+        supp_title = ''
+    else:
+        supp_title = 'Support: '
+        
+    # Save the Support values of each classes,
+    # then remove Support from level.
     
+    if isinstance(df.index, pd.MultiIndex):
+        df = df.unstack()
+    
+    if 'Support' not in df.columns.get_level_values(1):
+        df = df.swaplevel(1, 0, axis=1).sort_index(axis=1)
+    
+    sups = df.loc[:, (df.columns.get_level_values(0),
+                      df.columns.get_level_values(1) == 'Support')].values[0]
+    # Drop Support column:
+    df.drop(labels='Support', axis=1, level=1, inplace=True)
+
+    if no_supp_title:
+        supp_title = ''
+    else:
+        supp_title = 'Support: '
+            
+    # Create new col names -> levels[0]
+    new_lev_0 = []
+    for i, c in enumerate(df.columns.levels[0]):
+        new_lev_0.append('{} ({}{:.0f})'.format(c.title(),
+                                                supp_title, sups[i]))
+
+    # Reset col index. Note: dropping the Support col did not
+    # change the index, so [:-1] excludes it.
+    mdx = pd.MultiIndex.from_product([new_lev_0,
+                                      df.columns.levels[1][:-1]])
+    df.columns = mdx
+
+    # Style df:
+    return with_style(df, caption)
+
+
+def model_evaluation_report_bar(models, X, y, labels,
+                                xlim_to_1=False,
+                                encode=True,
+                                no_supp_title=True):
+    """
+    no_supp_title (bool): output '(value)' in header else 'Support: (value)'.
     """
     dfm = get_scores_df(models, X, y, labels, encode=encode)
     
@@ -232,7 +296,14 @@ def model_evaluation_report_bar(models, X, y, labels, xlim_to_1=False, encode=Tr
                        linestyle='dashed', lw=1.5)
 
         sup_i = int(df.loc[df.index[0],'Support'])
-        axes[i].set_title('{} (support: {})'.format(cat.title(), sup_i),
+        
+        if no_supp_title:
+            supp_title = ''
+        else:
+            supp_title = 'Support: '
+                    
+        axes[i].set_title('{} ({}{:.0f})'.format(cat.title(),
+                                                 supp_title, sup_i),
                           size='large')
         if xlim_to_1:
             axes[i].set_xlim((0, 1))

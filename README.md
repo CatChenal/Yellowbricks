@@ -124,9 +124,8 @@ for lbl in labels:
 ---
 # Implementation notes: `get_scores_df()`
 
-This function has a parameter, `to_style`, that acts as a swicth to output a DataFrame with different column MutliIndex.  
-Only the reporting function using the Pandas Styler, `model_evaluation_report_tbl()`, requires `to_style=True`, while the others do not (default = False).
-
+This function has a parameter, `class_col`, that acts as a swicth to output either the scores or classes as columns.  
+Only the reporting function using the Pandas Styler, `model_evaluation_report_tbl()`, requires `class_col=True`, while the others do not (default = False).
 
 ```python
 dfm_iris_tbl = rpts.get_scores_df(models, X, y, labels, encode=False, to_style=True)
@@ -139,3 +138,15 @@ dfm_iris = rpts.get_scores_df(models, X, y, labels, encode=False)
 dfm_iris.head()
 ```
 ![png](images/df2.png)
+
+## Either df can be passed through the styler function, so this 'DataFrame approach' could be the most straightforward for cases with a large number of classes:
+
+```python
+rpts.model_evaluation_report_from_df(dfm_iris_tbl, 'Model selection report (from df)')
+```
+![png](images/rpt_from_df.png)
+
+```python
+rpts.model_evaluation_report_from_df(dfm_iris, 'Model selection report (from df)')
+```
+![png](images/rpt_from_df.png)
