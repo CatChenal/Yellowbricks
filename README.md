@@ -128,7 +128,7 @@ This function has a parameter, `class_col`, that acts as a swicth to output eith
 Only the reporting function using the Pandas Styler, `model_evaluation_report_tbl()`, requires `class_col=True`, while the others do not (default = False).
 
 ```python
-dfm_iris_tbl = rpts.get_scores_df(models, X, y, labels, encode=False, to_style=True)
+dfm_iris_tbl = rpts.get_scores_df(models, X, y, labels, encode=False, class_col=True)
 dfm_iris_tbl.head()
 ```
 ![png](images/df1.png)
